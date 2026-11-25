@@ -10,12 +10,14 @@ namespace QuanLyQuanCafe
 		TableLayoutPanel tangTret;
 		TableLayoutPanel tangMot;
 
+		[System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
 		public TableLayoutPanel Tang0
 		{
 			get { return tangTret; }
 			set { tangTret = value; }
 		}
 
+		[System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
 		public TableLayoutPanel Tang1
 		{
 			get { return tangMot; }

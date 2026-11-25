@@ -20,12 +20,17 @@ namespace QuanLyQuanCafe
 		public Form_BestSelling(int nam, int quy, int thang, int ngay)
 		{
 			InitializeComponent();
+			this.nam = nam;
+			this.quy = quy;
+			this.thang = thang;
+			this.ngay = ngay;
 		}
 
 		private void Form_BestSelling_Load(object sender, EventArgs e)
 		{
 			if (nam == 0)
 				GetDateTime();
+			cbx_ThoiGian.SelectedIndex = 0;
 		}
 
 		private void cbx_ThoiGian_SelectedIndexChanged(object sender, EventArgs e)
@@ -47,80 +52,39 @@ namespace QuanLyQuanCafe
 		}
 
 		/// <summary>
-		/// Thống kê đơn hàng một loại nước uống  theo loại thời gian (ngày, tháng, quý, năm, tất cả)
-		/// </summary>
-		/// <param name="ten"></param>
-		/// <param name="maLoai"></param>
-		/// <param name="maTU"></param>
-		/// <param name="indexTime"></param>
-		/// <returns></returns>
-		DrinkOrder CountOrderByTime(string ten, string maLoai, string maTU, int indexTime)
-		{
-			using (var database = new CafeRestaurantEntities())
-			{
-				DrinkOrder drink = new DrinkOrder(maLoai, maTU, ten);
-				string tag;
-				if (database.DonHang.Count() == 0)
-					indexTime = -1;
-				switch (indexTime)
-				{
-					case 0:     //Tat ca
-						drink.SoLuong = database.DonHang.Where(o => o.MaLoai.Equals(maLoai) && o.MaThucUong.Equals(maTU)).Sum(o => o.SoLuong);
-						break;
-					case 1:     //Nam
-						tag = DateTime.Today.ToString("yy");
-						drink.SoLuong =
-							database.DonHang.Where(o => o.MaDonHang.Substring(6, 2).Equals(tag))
-							.Sum(o => o.SoLuong);
-						break;
-					case 2:     //Quy
-						int quarter = (DateTime.Today.Month + 2) / 3;
-						string year = DateTime.Today.ToString("yy");
-						drink.SoLuong =
-							database.DonHang.AsEnumerable().Where(o =>
-							{
-								string thang = o.MaDonHang.Substring(4, 2);
-								string nam = o.MaDonHang.Substring(6, 2);
-								if ((int.Parse(thang) + 2) / 3 == quarter && nam.Equals(year))
-									return true;
-								else return false;
-							}).Sum(o => o.SoLuong);
-						break;
-					case 3:     //Thang
-						tag = DateTime.Today.ToString("MMyy");
-						drink.SoLuong = database.DonHang.Where(o => o.MaDonHang.Substring(4, 4).Equals(tag)).Sum(o => o.SoLuong);
-						break;
-					case 4:     //Ngay
-						tag = DateTime.Today.ToString("ddMMyy");
-						drink.SoLuong = database.DonHang.Where(o => o.MaDonHang.Substring(2, 6).Equals(tag)).Sum(o => o.SoLuong);
-						break;
-					default:    //Không có gì
-						drink.SoLuong = 0;
-						break;
-				}
-				return drink;
-			}
-		}
-
-		/// <summary>
-		/// Thống kê đơn hàng tất cả các loại nước uống 
+		/// Thống kê đơn hàng tất cả các loại nước uống
 		/// </summary>
 		/// <param name="indexTime"></param>
 		void CountAllDrinkOrder(int indexTime)
 		{
 			using (var database = new CafeRestaurantEntities())
 			{
-				var list_drink = database.ThucUong.ToList();
-				List<DrinkOrder> list_result = new List<DrinkOrder>();
-				foreach (var item in list_drink)
+				var orders = database.DonHang.AsQueryable();
+				switch (indexTime)
 				{
-					if (item.KhaDung == true)
-					{
-						list_result.Add(CountOrderByTime(item.TenThucUong, item.MaLoai, item.MaThucUong, indexTime));
-					}
+					case 1:
+						orders = orders.Where(o => o.HoaDon.NgayHD.Year == nam);
+						break;
+					case 2:
+						orders = orders.Where(o => o.HoaDon.NgayHD.Year == nam && (o.HoaDon.NgayHD.Month + 2) / 3 == quy);
+						break;
+					case 3:
+						orders = orders.Where(o => o.HoaDon.NgayHD.Year == nam && o.HoaDon.NgayHD.Month == thang);
+						break;
+					case 4:
+						orders = orders.Where(o => o.HoaDon.NgayHD.Year == nam && o.HoaDon.NgayHD.Month == thang && o.HoaDon.NgayHD.Day == ngay);
+						break;
 				}
-				list_result.OrderBy(d => d.SoLuong);
-				grid_Drink.DataSource = list_result;
+
+				var totals = orders.GroupBy(o => new { o.MaLoai, o.MaThucUong })
+					.Select(g => new { g.Key.MaLoai, g.Key.MaThucUong, SoLuong = g.Sum(o => (int)o.SoLuong) })
+					.ToList();
+				var drinks = database.ThucUong.ToList();
+				grid_Drink.DataSource = drinks.Select(item => new DrinkOrder(item.MaLoai, item.MaThucUong, item.TenThucUong)
+				{
+					SoLuong = totals.Where(t => t.MaLoai == item.MaLoai && t.MaThucUong == item.MaThucUong)
+						.Select(t => t.SoLuong).FirstOrDefault()
+				}).OrderByDescending(d => d.SoLuong).ThenBy(d => d.TenThucUong).ToList();
 			}
 		}
 		#endregion

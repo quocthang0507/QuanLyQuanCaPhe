@@ -58,10 +58,8 @@ namespace QuanLyQuanCafe
 		{
 			using (var database = new CafeRestaurantEntities())
 			{
-				if (database.HoaDon.Count() == 0)
-					tbx_TongTrongNgay.Text = "0";
-				else tbx_TongTrongNgay.Text = database.HoaDon.Where(b => b.NgayHD.Day == ngay && b.NgayHD.Month == thang && b.NgayHD.Year == nam)
-					.Sum(b => b.TongTien).ToString();
+				tbx_TongTrongNgay.Text = (database.HoaDon.Where(b => b.NgayHD.Day == ngay && b.NgayHD.Month == thang && b.NgayHD.Year == nam)
+					.Sum(b => (long?)b.TongTien) ?? 0).ToString();
 			}
 		}
 
@@ -69,10 +67,8 @@ namespace QuanLyQuanCafe
 		{
 			using (var database = new CafeRestaurantEntities())
 			{
-				if (database.HoaDon.Count() == 0)
-					tbx_TongTrongThang.Text = "0";
-				else tbx_TongTrongThang.Text = database.HoaDon.Where(b => b.NgayHD.Month == thang && b.NgayHD.Year == nam)
-					.Sum(b => b.TongTien).ToString();
+				tbx_TongTrongThang.Text = (database.HoaDon.Where(b => b.NgayHD.Month == thang && b.NgayHD.Year == nam)
+					.Sum(b => (long?)b.TongTien) ?? 0).ToString();
 			}
 		}
 
@@ -80,10 +76,8 @@ namespace QuanLyQuanCafe
 		{
 			using (var database = new CafeRestaurantEntities())
 			{
-				if (database.HoaDon.Count() == 0)
-					tbx_TongTrongQuy.Text = "0";
-				else tbx_TongTrongQuy.Text = database.HoaDon.Where(b => (b.NgayHD.Month + 2) / 3 == quy && b.NgayHD.Year == nam)
-					.Sum(b => b.TongTien).ToString();
+				tbx_TongTrongQuy.Text = (database.HoaDon.Where(b => (b.NgayHD.Month + 2) / 3 == quy && b.NgayHD.Year == nam)
+					.Sum(b => (long?)b.TongTien) ?? 0).ToString();
 			}
 		}
 
@@ -91,10 +85,8 @@ namespace QuanLyQuanCafe
 		{
 			using (var database = new CafeRestaurantEntities())
 			{
-				if (database.HoaDon.Count() == 0)
-					tbx_TongTrongNam.Text = "0";
-				else tbx_TongTrongNam.Text = database.HoaDon.Where(b => b.NgayHD.Year == nam)
-					.Sum(b => b.TongTien).ToString();
+				tbx_TongTrongNam.Text = (database.HoaDon.Where(b => b.NgayHD.Year == nam)
+					.Sum(b => (long?)b.TongTien) ?? 0).ToString();
 			}
 		}
 
@@ -102,9 +94,7 @@ namespace QuanLyQuanCafe
 		{
 			using (var database = new CafeRestaurantEntities())
 			{
-				if (database.HoaDon.Count() == 0)
-					tbx_TongThuNhap.Text = "0";
-				else tbx_TongThuNhap.Text = database.HoaDon.Sum(b => b.TongTien).ToString();
+				tbx_TongThuNhap.Text = (database.HoaDon.Sum(b => (long?)b.TongTien) ?? 0).ToString();
 			}
 		}
 	}

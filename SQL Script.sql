@@ -97,7 +97,6 @@ create table DonHang
 	SoLuong tinyint not null default 0,
 	MaHD nchar(12) not null,
 	constraint pk_DonHang primary key (MaDonHang),
-	unique (MaThucUong, MaLoai),
 	foreign key (MaThucUong, MaLoai) references ThucUong(MaThucUong, MaLoai),
 	foreign key (MaHD) references HoaDon(MaHD)
 );

@@ -16,6 +16,7 @@ namespace QuanLyQuanCafe
 		User account = new User();
 		BalloonTooltip tooltip = new BalloonTooltip();
 
+		[System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
 		public User Account
 		{
 			get { return account; }

@@ -38,6 +38,11 @@ namespace QuanLyQuanCafe
 				MessageBox.Show("Không được để trống trường bắt buộc", "Thông báo");
 				return;
 			}
+			if (maSK == "NONAME" || tyLe > 100 || soLuong < 0 || batDau > ketThuc)
+			{
+				MessageBox.Show("Mã, tỷ lệ giảm, số lượng hoặc thời gian khuyến mãi không hợp lệ", "Thông báo");
+				return;
+			}
 			SuKien item = new SuKien { MaSuKien = maSK, TenSuKien = tenSK, TyLeGiam = tyLe, SoLuong = soLuong, ThoiGian_BD = batDau, ThoiGian_KT = ketThuc };
 			database.SuKien.Add(item);
 			database.SaveChanges();
@@ -47,12 +52,17 @@ namespace QuanLyQuanCafe
 		private void btn_Xoa_Click(object sender, EventArgs e)
 		{
 			string maSK = tbx_MaSuKien.Text;
-			if (maSK == "")
+			if (maSK == "" || maSK == "NONAME")
 			{
 				MessageBox.Show("Không được để trống trường bắt buộc", "Thông báo");
 				return;
 			}
 			SuKien item = database.SuKien.Where(i => i.MaSuKien.Equals(maSK)).SingleOrDefault();
+			if (item == null)
+			{
+				MessageBox.Show("Không tìm thấy sự kiện", "Thông báo");
+				return;
+			}
 			database.SuKien.Remove(item);
 			database.SaveChanges();
 			btn_Xuat.PerformClick();
@@ -71,7 +81,17 @@ namespace QuanLyQuanCafe
 				MessageBox.Show("Không được để trống trường bắt buộc", "Thông báo");
 				return;
 			}
+			if (maSK == "NONAME" || tyLe > 100 || soLuong < 0 || batDau > ketThuc)
+			{
+				MessageBox.Show("Mã, tỷ lệ giảm, số lượng hoặc thời gian khuyến mãi không hợp lệ", "Thông báo");
+				return;
+			}
 			SuKien item = database.SuKien.Where(i => i.MaSuKien.Equals(maSK)).SingleOrDefault();
+			if (item == null)
+			{
+				MessageBox.Show("Không tìm thấy sự kiện", "Thông báo");
+				return;
+			}
 			item.TenSuKien = tenSK;
 			item.TyLeGiam = tyLe;
 			item.SoLuong = soLuong;
