@@ -17,13 +17,13 @@
 - Windows, .NET 10 SDK (hoặc SDK mới hơn hỗ trợ `net10.0-windows`) và SQL Server 2016 SP1 trở lên hoặc SQL Server LocalDB.
 - Ứng dụng tiếp tục sử dụng Entity Framework 6 và cơ sở dữ liệu SQL Server hiện có.
 - **Sao lưu cơ sở dữ liệu trước khi nâng cấp.** Chọn đúng cơ sở dữ liệu `CafeRestaurant`, sau đó chạy lần lượt [migrate-order-uniqueness.sql](QuanLyQuanCafe/migrate-order-uniqueness.sql), [migrate-identifiers.sql](QuanLyQuanCafe/migrate-identifiers.sql), [migrate-invoice-prices.sql](QuanLyQuanCafe/migrate-invoice-prices.sql), [migrate-cafe-operations.sql](QuanLyQuanCafe/migrate-cafe-operations.sql), [migrate-draft-orders.sql](QuanLyQuanCafe/migrate-draft-orders.sql) và [migrate-takeaway.sql](QuanLyQuanCafe/migrate-takeaway.sql). Không chạy các tập lệnh tạo cơ sở dữ liệu mới trên dữ liệu đang sử dụng.
-- Với cơ sở dữ liệu mới, tạo dữ liệu bằng [SQL Script.sql](SQL%20Script.sql), rồi chạy các tập lệnh nâng cấp trên. [Full Script.sql](Full%20Script.sql) là bản xuất cũ, có thể chứa đường dẫn máy cũ và ràng buộc không còn phù hợp.
+- Với cơ sở dữ liệu mới, chạy **một trong hai** tập lệnh tương đương [SQL Script.sql](SQL%20Script.sql) hoặc [Full Script.sql](Full%20Script.sql); cả hai đã gồm schema hiện tại và dữ liệu mẫu, không cần chạy migration. Tập lệnh từ chối chạy nếu `CafeRestaurant` đã tồn tại. Nếu chạy trong SSMS và nhận cảnh báo này, chạy `SET NOEXEC OFF` trước khi tiếp tục sử dụng cùng kết nối.
 - Chỉnh chuỗi kết nối `CafeRestaurantEntities` trong [App.config](QuanLyQuanCafe/QuanLyQuanCafe/App.config) cho phù hợp máy chủ trước khi build; cấu hình mặc định dùng `(localdb)\MSSQLLocalDB`. Không đưa mật khẩu vào mã nguồn hoặc kho Git.
 - Build bằng `dotnet build QuanLyQuanCafe\QuanLyQuanCafe.sln -c Release`. Cấu hình trong thư mục xuất bản là `QuanLyQuanCafe.dll.config`.
 
 ## Kiểm thử
 
-Trên Windows có SQL Server LocalDB và `sqlcmd`, chạy `.\tests\CafeIntegration\run.ps1`. Tập lệnh tạo một LocalDB và thư mục tạm riêng, chạy các migration hai lần, kiểm tra giá cũ, ca, hoàn tiền, đơn nháp và mang đi, sau đó xóa tài nguyên thử nghiệm. Không chạy tập lệnh này trên cơ sở dữ liệu đang sử dụng.
+Trên Windows có SQL Server LocalDB và `sqlcmd`, chạy `.\tests\CafeIntegration\run.ps1`. Tập lệnh tạo LocalDB và thư mục tạm riêng, kiểm tra cả hai tập lệnh tạo mới và bảo vệ cơ sở dữ liệu đã tồn tại, sau đó mô phỏng schema cũ, chạy các migration hai lần và kiểm tra giá cũ, ca, hoàn tiền, đơn nháp và mang đi. Tài nguyên thử nghiệm được xóa sau khi chạy; không chạy trên cơ sở dữ liệu đang sử dụng.
 
 ## Sử dụng
 

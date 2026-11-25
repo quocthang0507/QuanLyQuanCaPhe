@@ -1,16 +1,23 @@
-﻿USE [master]
+﻿-- Fresh installations only. Back up existing databases and use the migration scripts instead.
+USE [master]
 GO
 ---------------------------------------
---drop database CafeRestaurant
-go
----------------------------------------
-create database CafeRestaurant
+BEGIN TRY
+	IF DB_ID(N'CafeRestaurant') IS NOT NULL
+		THROW 50000, 'CafeRestaurant already exists. Use the migration scripts instead.', 1;
+	create database CafeRestaurant
+END TRY
+BEGIN CATCH
+	DECLARE @CreationError nvarchar(2048) = ERROR_MESSAGE();
+	RAISERROR('%s', 16, 1, @CreationError);
+	SET NOEXEC ON;
+END CATCH
 go
 ---------------------------------------
 use CafeRestaurant
 go
 ---------------------------------------
-SET DATEFORMAT dmy; 
+SET DATEFORMAT dmy;
 go
 ---------------------------------------
 create table LoaiNuoc
@@ -280,78 +287,141 @@ go
 
 create function fn_TaoID_TiepTheo(@ID_BanDau nchar(12)) returns nchar(12)
 as
-	begin
-		declare @chuoi_NgayTuID nchar(6), @date_NgayTuID date, @date_BayGio date, @TienTo nchar(2)
-		set @chuoi_NgayTuID = substring(@ID_BanDau, 3, 8)
-		set @date_BayGio = getdate()
-		set @TienTo = left(@ID_BanDau, 2)
-		if(@chuoi_NgayTuID = dbo.fn_DateToString(@date_BayGio))
-			begin
-				declare @temp int
-				set @temp = cast(right(@ID_BanDau, 4) as int)
-				return concat(@TienTo, dbo.fn_DateToString(@date_BayGio), right('0000' + convert(varchar, @temp + 1), 4))
-			end
-		return concat(@TienTo, dbo.fn_DateToString(@date_BayGio), '0001')
-	end
+begin
+	declare @prefix nchar(2) = left(@ID_BanDau, 2);
+	declare @today nchar(6) = dbo.fn_DateToString(getdate());
+	declare @number int = try_convert(int, right(@ID_BanDau, 4));
+	if @prefix not in (N'HD', N'DH') or @number is null return null;
+	if substring(@ID_BanDau, 3, 6) <> @today return concat(@prefix, @today, N'0001');
+	if @number >= 9999 return null;
+	return concat(@prefix, @today, right(N'0000' + convert(nvarchar(4), @number + 1), 4));
+end
 go
 
 create function fn_SinhMaHD() returns nchar(12)
 as
-	begin
-		--Go to the last bill
-		declare @i int
-		set @i = 0
-		declare cur_MaHD cursor local
-			for select MaHD
-		from HoaDon
-		open cur_MaHD
-		declare @MaHD nchar(12)
-		fetch next from cur_MaHD into @MaHD
-		while @@FETCH_STATUS = 0
-			begin
-				fetch next from cur_MaHD into @MaHD
-				set @i = @i + 1
-			end
-		close cur_MaHD
-		deallocate cur_MaHD
-		--Generate new bill id
-		if (@i = 0)
-			begin
-				return concat('HD', dbo.fn_DateToString(getdate()), '0001')
-			end
-		return (dbo.fn_TaoID_TiepTheo(@MaHD))
-	end
+begin
+	declare @prefix nchar(8) = concat(N'HD', dbo.fn_DateToString(getdate()));
+	declare @number int;
+	select @number = max(try_convert(int, right(MaHD, 4)))
+	from dbo.HoaDon where MaHD like @prefix + N'[0-9][0-9][0-9][0-9]';
+	if @number >= 9999 return null;
+	return concat(@prefix, right(N'0000' + convert(nvarchar(4), isnull(@number, 0) + 1), 4));
+end
 go
-
---print dbo.fn_SinhMaHD()
 
 create function fn_SinhMaDH() returns nchar(12)
 as
-	begin
-		declare @i int
-		set @i = 0
-		--Go to the last bill
-		declare cur_MaDH cursor local
-			for select MaDonHang
-		from DonHang
-		open cur_MaDH
-		declare @MaDH nchar(12)
-		fetch next from cur_MaDH into @MaDH
-		while @@FETCH_STATUS = 0
-			begin
-				fetch next from cur_MaDH into @MaDH
-				set @i = @i + 1
-			end
-		close cur_MaDH
-		deallocate cur_MaDH
-		--Generate new order id
-		if (@i = 0)
-			begin
-				return concat('DH', dbo.fn_DateToString(getdate()), '0001')
-			end
-		return dbo.fn_TaoID_TiepTheo(@MaDH)
-	end
+begin
+	declare @prefix nchar(8) = concat(N'DH', dbo.fn_DateToString(getdate()));
+	declare @number int;
+	select @number = max(try_convert(int, right(MaDonHang, 4)))
+	from dbo.DonHang where MaDonHang like @prefix + N'[0-9][0-9][0-9][0-9]';
+	if @number >= 9999 return null;
+	return concat(@prefix, right(N'0000' + convert(nvarchar(4), isnull(@number, 0) + 1), 4));
+end
 go
 
---print dbo.fn_SinhMaDH()
-------------------------------------------------HẾT----------------------------------------------------------
+-- Price snapshots are recorded only for newly paid invoice lines.
+create table dbo.GiaBanDonHang
+(
+	MaDonHang nchar(12) not null constraint PK_GiaBanDonHang primary key,
+	DonGia smallmoney not null,
+	constraint FK_GiaBanDonHang_DonHang foreign key (MaDonHang) references dbo.DonHang(MaDonHang),
+	constraint CK_GiaBanDonHang_DonGia check (DonGia >= 0)
+);
+go
+
+-- SQL Server requires these settings for the filtered unique index.
+SET ANSI_NULLS ON;
+SET ANSI_PADDING ON;
+SET ANSI_WARNINGS ON;
+SET ARITHABORT ON;
+SET CONCAT_NULL_YIELDS_NULL ON;
+SET QUOTED_IDENTIFIER ON;
+SET NUMERIC_ROUNDABORT OFF;
+go
+
+create table dbo.CaLamViec
+(
+	MaCa bigint identity(1,1) not null constraint PK_CaLamViec primary key,
+	NguoiMo nvarchar(20) not null,
+	LucMo datetime2 not null,
+	TienDauCa bigint not null,
+	NguoiDong nvarchar(20) null,
+	LucDong datetime2 null,
+	TienCuoiCa bigint null,
+	TienDuKien bigint null,
+	MotCa bit not null constraint DF_CaLamViec_MotCa default (1),
+	constraint CK_CaLamViec_MotCa check (MotCa = 1),
+	constraint CK_CaLamViec_Tien check (TienDauCa >= 0 and (TienCuoiCa is null or TienCuoiCa >= 0)),
+	constraint CK_CaLamViec_Dong check (
+		(LucDong is null and NguoiDong is null and TienCuoiCa is null and TienDuKien is null) or
+		(LucDong is not null and NguoiDong is not null and TienCuoiCa is not null and TienDuKien is not null)),
+	constraint FK_CaLamViec_NguoiMo foreign key (NguoiMo) references dbo.TaiKhoan(TenDangNhap),
+	constraint FK_CaLamViec_NguoiDong foreign key (NguoiDong) references dbo.TaiKhoan(TenDangNhap)
+);
+create unique index UX_CaLamViec_MotCaMo on dbo.CaLamViec(MotCa) where LucDong is null;
+go
+
+create table dbo.ThanhToanHoaDon
+(
+	MaHD nchar(12) not null constraint PK_ThanhToanHoaDon primary key,
+	MaCa bigint not null,
+	PhuongThuc varchar(12) not null,
+	LucThanhToan datetime2 not null,
+	constraint CK_ThanhToanHoaDon_PhuongThuc check (PhuongThuc in ('CASH', 'TRANSFER')),
+	constraint FK_ThanhToanHoaDon_HoaDon foreign key (MaHD) references dbo.HoaDon(MaHD),
+	constraint FK_ThanhToanHoaDon_Ca foreign key (MaCa) references dbo.CaLamViec(MaCa)
+);
+go
+
+create table dbo.HoanTienHoaDon
+(
+	MaHD nchar(12) not null constraint PK_HoanTienHoaDon primary key,
+	MaCa bigint not null,
+	NguoiHoan nvarchar(20) not null,
+	LucHoan datetime2 not null,
+	PhuongThuc varchar(12) not null,
+	LyDo nvarchar(256) not null,
+	constraint CK_HoanTienHoaDon_PhuongThuc check (PhuongThuc in ('CASH', 'TRANSFER')),
+	constraint FK_HoanTienHoaDon_HoaDon foreign key (MaHD) references dbo.HoaDon(MaHD),
+	constraint FK_HoanTienHoaDon_Ca foreign key (MaCa) references dbo.CaLamViec(MaCa),
+	constraint FK_HoanTienHoaDon_NguoiHoan foreign key (NguoiHoan) references dbo.TaiKhoan(TenDangNhap)
+);
+go
+
+create table dbo.DonTam
+(
+	MaBan nchar(5) not null,
+	MaTang nchar(5) not null,
+	LucTao datetime2 not null constraint DF_DonTam_LucTao default (SYSDATETIME()),
+	constraint PK_DonTam primary key (MaBan, MaTang),
+	constraint FK_DonTam_Ban foreign key (MaBan, MaTang) references dbo.Ban(MaBan, MaTang)
+);
+go
+
+create table dbo.ChiTietDonTam
+(
+	MaDong bigint identity(1,1) not null constraint PK_ChiTietDonTam primary key,
+	MaBan nchar(5) not null,
+	MaTang nchar(5) not null,
+	MaThucUong nchar(5) not null,
+	MaLoai nchar(4) not null,
+	SoLuong tinyint not null,
+	constraint CK_ChiTietDonTam_SoLuong check (SoLuong > 0),
+	constraint FK_ChiTietDonTam_DonTam foreign key (MaBan, MaTang)
+		references dbo.DonTam(MaBan, MaTang) on update cascade on delete cascade,
+	constraint FK_ChiTietDonTam_ThucUong foreign key (MaThucUong, MaLoai)
+		references dbo.ThucUong(MaThucUong, MaLoai)
+);
+go
+
+create table dbo.BanMangDi
+(
+	MaBan nchar(5) not null,
+	MaTang nchar(5) not null,
+	constraint PK_BanMangDi primary key (MaBan, MaTang),
+	constraint FK_BanMangDi_Ban foreign key (MaBan, MaTang) references dbo.Ban(MaBan, MaTang)
+);
+go
