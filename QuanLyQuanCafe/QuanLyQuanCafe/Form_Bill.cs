@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using System.Windows.Forms;
+using System.Data.SqlClient;
+using System.Drawing;
 
 namespace QuanLyQuanCafe
 {
@@ -13,6 +15,67 @@ namespace QuanLyQuanCafe
 		public Form_Bill()
 		{
 			InitializeComponent();
+			flowLayoutPanel1.AutoScroll = true;
+			var details = new Button
+			{
+				Text = "Chi tiết và in hóa đơn",
+				Size = new Size(284, 40),
+				AccessibleName = "Chi tiết và in hóa đơn"
+			};
+			details.Click += ShowReceipt;
+			flowLayoutPanel1.Controls.Add(details);
+			if (!User.Type)
+			{
+				var refund = new Button { Text = "Hoàn toàn bộ hóa đơn", Size = new Size(284, 40) };
+				refund.Click += Refund;
+				flowLayoutPanel1.Controls.Add(refund);
+			}
+		}
+
+		private void Refund(object sender, EventArgs e)
+		{
+			if (grid_Bill.CurrentRow == null || grid_Bill.CurrentRow.Cells[0].Value == null)
+			{
+				MessageBox.Show("Vui lòng chọn hóa đơn.", "Thông báo");
+				return;
+			}
+			string billId = grid_Bill.CurrentRow.Cells[0].Value.ToString();
+			try
+			{
+				using (var form = new Form_Refund(billId, RefundService.PaymentMethod(billId)))
+					form.ShowDialog(this);
+			}
+			catch (SqlException ex)
+			{
+				MessageBox.Show("Không thể tải thông tin thanh toán: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+			}
+		}
+
+		private void ShowReceipt(object sender, EventArgs e)
+		{
+			if (grid_Bill.CurrentRow == null || grid_Bill.CurrentRow.Cells[0].Value == null)
+			{
+				MessageBox.Show("Vui lòng chọn hóa đơn.", "Thông báo");
+				return;
+			}
+			try
+			{
+				string receipt = BillReceipt.Load(grid_Bill.CurrentRow.Cells[0].Value.ToString());
+				using (var form = new Form_BillDetail(receipt))
+					form.ShowDialog(this);
+			}
+			catch (SqlException ex)
+			{
+				MessageBox.Show("Không thể tải hóa đơn: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+			}
+			catch (System.Drawing.Printing.InvalidPrinterException ex)
+			{
+				MessageBox.Show("Không thể in hóa đơn: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+			}
+			catch (InvalidOperationException ex)
+			{
+				MessageBox.Show("Không thể xem hoặc in hóa đơn: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+			}
 		}
 
 		#region Events

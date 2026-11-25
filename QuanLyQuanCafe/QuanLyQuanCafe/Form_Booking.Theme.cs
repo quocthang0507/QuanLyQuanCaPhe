@@ -49,8 +49,8 @@ namespace QuanLyQuanCafe
 			ReplaceAction(lbl_ApDung, "Tạo hóa đơn", "Tạo hóa đơn từ đơn hàng đang chọn", lbl_ChuyenThanhHoaDon_Click, false);
 			ReplaceAction(lbl_InHD, "Thanh toán", "Lưu và hiển thị hóa đơn", lbl_InHD_Click, true);
 			ReplaceAction(lbl_ChuyenBan, "Chuyển bàn", "Chuyển đơn chưa thanh toán sang bàn trống", lbl_ChuyenBan_Click, false);
-			ReplaceAction(lbl_XoaBan, "Làm trống bàn", "Làm trống bàn đang chọn", lbl_XoaBan_Click, false);
-			ReplaceAction(lbl_XoaTatCa, "Làm trống tất cả", "Làm trống tất cả các bàn", lbl_XoaTatCa_Click, false);
+			ReplaceAction(lbl_XoaBan, "Làm trống bàn", "Làm trống bàn hoặc hủy đơn nháp (quản trị viên)", lbl_XoaBan_Click, false);
+			ReplaceAction(lbl_XoaTatCa, "Trống bàn đã trả", "Làm trống các bàn đã thanh toán; giữ nguyên đơn nháp", lbl_XoaTatCa_Click, false);
 			ReplaceAction(lbl_XemHD, "Xem hóa đơn", "Xem danh sách hóa đơn", lbl_XemHD_Click, false);
 			RefreshTableAppearance();
 		}

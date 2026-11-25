@@ -62,6 +62,7 @@
 			this.panel7 = new System.Windows.Forms.Panel();
 			this.btn_Xoa = new System.Windows.Forms.Button();
 			this.btn_Them = new System.Windows.Forms.Button();
+			this.btn_CapNhatTrangThai = new System.Windows.Forms.Button();
 			this.groupBox1 = new System.Windows.Forms.GroupBox();
 			this.btn_TimTheoConLam = new System.Windows.Forms.Button();
 			this.btn_TimTheoDT = new System.Windows.Forms.Button();
@@ -381,6 +382,7 @@
 			// 
 			this.panel7.Controls.Add(this.btn_Xoa);
 			this.panel7.Controls.Add(this.btn_Them);
+			this.panel7.Controls.Add(this.btn_CapNhatTrangThai);
 			this.panel7.Dock = System.Windows.Forms.DockStyle.Top;
 			this.panel7.Location = new System.Drawing.Point(3, 332);
 			this.panel7.Name = "panel7";
@@ -390,9 +392,9 @@
 			// btn_Xoa
 			// 
 			this.btn_Xoa.Font = new System.Drawing.Font("Microsoft Sans Serif", 12.25F);
-			this.btn_Xoa.Location = new System.Drawing.Point(138, 3);
+			this.btn_Xoa.Location = new System.Drawing.Point(91, 3);
 			this.btn_Xoa.Name = "btn_Xoa";
-			this.btn_Xoa.Size = new System.Drawing.Size(90, 35);
+			this.btn_Xoa.Size = new System.Drawing.Size(72, 35);
 			this.btn_Xoa.TabIndex = 9;
 			this.btn_Xoa.Text = "Xóa";
 			this.btn_Xoa.UseVisualStyleBackColor = true;
@@ -401,14 +403,24 @@
 			// btn_Them
 			// 
 			this.btn_Them.Font = new System.Drawing.Font("Microsoft Sans Serif", 12.25F);
-			this.btn_Them.Location = new System.Drawing.Point(42, 3);
+			this.btn_Them.Location = new System.Drawing.Point(13, 3);
 			this.btn_Them.Name = "btn_Them";
-			this.btn_Them.Size = new System.Drawing.Size(90, 35);
+			this.btn_Them.Size = new System.Drawing.Size(72, 35);
 			this.btn_Them.TabIndex = 8;
 			this.btn_Them.Text = "Thêm";
 			this.btn_Them.UseVisualStyleBackColor = true;
 			this.btn_Them.Click += new System.EventHandler(this.btn_Them_Click);
-			// 
+			//
+			// btn_CapNhatTrangThai
+			//
+			this.btn_CapNhatTrangThai.Location = new System.Drawing.Point(169, 3);
+			this.btn_CapNhatTrangThai.Name = "btn_CapNhatTrangThai";
+			this.btn_CapNhatTrangThai.Size = new System.Drawing.Size(110, 35);
+			this.btn_CapNhatTrangThai.TabIndex = 10;
+			this.btn_CapNhatTrangThai.Text = "Lưu trạng thái";
+			this.btn_CapNhatTrangThai.UseVisualStyleBackColor = true;
+			this.btn_CapNhatTrangThai.Click += new System.EventHandler(this.btn_CapNhatTrangThai_Click);
+			//
 			// groupBox1
 			// 
 			this.groupBox1.Controls.Add(this.btn_TimTheoConLam);
@@ -524,6 +536,7 @@
 		private System.Windows.Forms.Panel panel7;
 		private System.Windows.Forms.Button btn_Xoa;
 		private System.Windows.Forms.Button btn_Them;
+		private System.Windows.Forms.Button btn_CapNhatTrangThai;
 		private System.Windows.Forms.GroupBox groupBox1;
 		private System.Windows.Forms.Button btn_TimTheoDT;
 		private System.Windows.Forms.Button btn_TimTheoTen;

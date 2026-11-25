@@ -74,7 +74,8 @@ namespace QuanLyQuanCafe
 		{
 			using (var database = new CafeRestaurantEntities())
 			{
-				var list = database.TaiKhoan.Where(x => x.TenDangNhap.Equals(username)).ToList();
+				var list = database.TaiKhoan.Where(x => x.TenDangNhap.Equals(username) &&
+					(x.LoaiTaiKhoan == false || x.ConLam == true)).ToList();
 				if (list.Count != 0)
 				{
 					var account = list[0];
@@ -146,7 +147,11 @@ namespace QuanLyQuanCafe
 			using (var database = new CafeRestaurantEntities())
 			{
 				var oldData = database.TaiKhoan.Find(account.TenDangNhap);
-				database.Entry(oldData).CurrentValues.SetValues(account);
+				oldData.MatKhau = account.MatKhau;
+				oldData.HoTen = account.HoTen;
+				oldData.CMND = account.CMND;
+				oldData.NgaySinh = account.NgaySinh;
+				oldData.SoDT = account.SoDT;
 				database.SaveChanges();
 			}
 		}

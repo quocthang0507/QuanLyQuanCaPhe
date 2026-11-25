@@ -5,6 +5,7 @@ using System.Data.Entity.Infrastructure;
 using System.Data.Entity.Core;
 using System.Drawing;
 using System.Linq;
+using System.Collections.Generic;
 using System.Windows.Forms;
 
 namespace QuanLyQuanCafe
@@ -15,6 +16,7 @@ namespace QuanLyQuanCafe
 		User account = new User();
 		CafeRestaurantEntities database = new CafeRestaurantEntities();
 		Label selectedTable;
+		ToolStripComboBox paymentMethod;
 
 		public Form_Booking(User account)
 		{
@@ -22,6 +24,48 @@ namespace QuanLyQuanCafe
 			this.Account = account;
 			grid_HoaDon.ReadOnly = true;
 			ApplySalesTheme();
+			InitializePaymentControls();
+		}
+
+		void InitializePaymentControls()
+		{
+			var takeawayMenu = new ToolStripMenuItem("Đơn mang đi");
+			takeawayMenu.Click += (sender, args) =>
+			{
+				using (var form = new Form_Takeaway())
+				{
+					if (form.ShowDialog(this) != DialogResult.OK)
+						return;
+					var table = new Label
+					{
+						Name = form.Selected.MaBan.Trim() + "_" + form.Selected.MaTang.Trim(),
+						ImageList = list_Table,
+						ImageKey = "full"
+					};
+					ChonBan(table, EventArgs.Empty);
+				}
+			};
+			menuStrip1.Items.Add(takeawayMenu);
+			var shiftMenu = new ToolStripMenuItem("Ca bán hàng");
+			shiftMenu.Click += (sender, args) =>
+			{
+				using (var form = new Form_Shift(account))
+					form.ShowDialog(this);
+			};
+			menuStrip1.Items.Add(shiftMenu);
+			menuStrip1.Items.Add(new ToolStripLabel("Thanh toán:"));
+			paymentMethod = new ToolStripComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 120 };
+			paymentMethod.Items.AddRange(new object[] { "Tiền mặt", "Chuyển khoản" });
+			paymentMethod.SelectedIndexChanged += (sender, args) =>
+			{
+				tbx_DuaTruoc.ReadOnly = paymentMethod.SelectedIndex == 1;
+				if (paymentMethod.SelectedIndex == 1)
+					tbx_DuaTruoc.Text = tbx_ThanhTien.Text;
+				else
+					tbx_DuaTruoc.Clear();
+			};
+			menuStrip1.Items.Add(paymentMethod);
+			paymentMethod.SelectedIndex = 0;
 		}
 
 		/// <summary>
@@ -52,6 +96,16 @@ namespace QuanLyQuanCafe
 			Load_KhuyenMai();
 			Load_ThucUong();
 			AddTooltip();
+			try
+			{
+				RefreshDraftIndicators();
+			}
+			catch (SqlException ex)
+			{
+				MessageBox.Show("Không thể tải đơn chưa thanh toán. Hãy kiểm tra cơ sở dữ liệu và các tập lệnh nâng cấp: " +
+					ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+				Close();
+			}
 		}
 
 		private void lbl_refresh_Click(object sender, EventArgs e)
@@ -131,7 +185,7 @@ namespace QuanLyQuanCafe
 				return;
 			string ngay = DateTime.Today.ToString("dd/MM/yyyy");
 			string maNV = account.MaNhanVien;
-			string[] maBan = lbl_BanChon.Text.Split('_');
+			string[] maBan = selectedTable.Name.Split('_');
 			int discount = GetDiscountPercent();
 			if (discount < 0)
 				return;
@@ -141,6 +195,8 @@ namespace QuanLyQuanCafe
 			int thanhTien = (int)((long)tongTien * (100 - discount) / 100);
 			tbx_TongTien.Text = tongTien.ToString();
 			tbx_ThanhTien.Text = thanhTien.ToString();
+			if (paymentMethod.SelectedIndex == 1)
+				tbx_DuaTruoc.Text = tbx_ThanhTien.Text;
 			string maSK = discount != 0 ? cbx_KhuyenMai.Text : "NONAME";
 			grid_HoaDon.Rows.Clear();
 			grid_HoaDon.Rows.Add(maHD, ngay, maNV, maBan[0], maBan[1], thanhTien, maSK);
@@ -155,22 +211,52 @@ namespace QuanLyQuanCafe
 				MessageBox.Show("Chưa có hóa đơn", "Thông báo");
 				return;
 			}
-			else if (tbx_DuaTruoc.Text == "")
+			try
+			{
+				if (CheckBillIsSaved())
+				{
+					MessageBox.Show("Hóa đơn này đã được thanh toán.", "Thông báo");
+					return;
+				}
+				if (ShiftService.Current(database) == null)
+				{
+					MessageBox.Show("Vui lòng mở ca trước khi thanh toán.", "Thông báo");
+					return;
+				}
+			}
+			catch (SqlException ex)
+			{
+				MessageBox.Show("Không thể kiểm tra hóa đơn hoặc ca: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+				return;
+			}
+			if (tbx_DuaTruoc.Text == "")
 			{
 				MessageBox.Show("Bạn chưa nhập số tiền mà khách đưa", "Thông báo");
 				return;
 			}
-			DialogResult dialog = MessageBox.Show("Bạn có muốn xuất hóa đơn và đồng thời lưu vào hệ thống không?", "Xác nhận", MessageBoxButtons.OKCancel, MessageBoxIcon.Question);
+			bool transfer = paymentMethod.SelectedIndex == 1;
+			string prompt = transfer
+				? "Bạn đã kiểm tra và xác nhận nhận đủ chuyển khoản? Hóa đơn sẽ được lưu."
+				: "Xác nhận đã nhận tiền mặt và lưu hóa đơn?";
+			DialogResult dialog = MessageBox.Show(prompt, "Xác nhận", MessageBoxButtons.OKCancel, MessageBoxIcon.Question);
 			if (dialog == DialogResult.OK)
 			{
 				string maHoaDon = grid_HoaDon.Rows[0].Cells[0].Value.ToString();
 				try
 				{
-					using (var transaction = database.Database.BeginTransaction())
+					using (var transaction = database.Database.BeginTransaction(IsolationLevel.Serializable))
 					{
+						long shiftId = ShiftService.LockOpenShift(database);
+						var parts = selectedTable.Name.Split('_');
+						var expected = CurrentDraftLines();
+						DraftService.Consume(database, parts[0], parts[1], expected);
 						if (!AddBillToDb())
 							return;
 						AddOrderToDb();
+						database.Database.ExecuteSqlCommand(
+							"INSERT INTO dbo.ThanhToanHoaDon (MaHD, MaCa, PhuongThuc, LucThanhToan) VALUES (@id, @shift, @method, SYSDATETIME())",
+							new SqlParameter("@id", maHoaDon), new SqlParameter("@shift", shiftId),
+							new SqlParameter("@method", transfer ? "TRANSFER" : "CASH"));
 						transaction.Commit();
 					}
 				}
@@ -197,7 +283,23 @@ namespace QuanLyQuanCafe
 				selectedTable.ImageKey = "full";
 				AddTooltipToTable(maHoaDon);
 				RefreshTableAppearance();
-				PrintBill(maHoaDon);
+				try
+				{
+					ShowOrderByID(maHoaDon);
+					PrintBill(maHoaDon);
+				}
+				catch (SqlException ex)
+				{
+					MessageBox.Show("Hóa đơn đã lưu, nhưng không thể tải để in: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+				}
+				catch (System.Drawing.Printing.InvalidPrinterException ex)
+				{
+					MessageBox.Show("Hóa đơn đã lưu, nhưng không thể in: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+				}
+				catch (InvalidOperationException ex)
+				{
+					MessageBox.Show("Hóa đơn đã lưu, nhưng không thể in: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+				}
 			}
 		}
 
@@ -212,6 +314,11 @@ namespace QuanLyQuanCafe
 		{
 			try
 			{
+				if (IsTakeaway(selectedTable))
+				{
+					MessageBox.Show("Đơn mang đi không thể chuyển bàn.", "Thông báo");
+					return;
+				}
 				if (selectedTable == null || grid_DonHang.Rows.Count == 0 ||
 					(grid_HoaDon.Rows.Count > 0 && CheckBillIsSaved()))
 				{
@@ -246,6 +353,10 @@ namespace QuanLyQuanCafe
 			{
 				MessageBox.Show("Không thể chuyển bàn: " + ex.GetBaseException().Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
 			}
+			catch (InvalidOperationException ex)
+			{
+				MessageBox.Show(ex.Message, "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+			}
 		}
 
 		bool MoveDraftTo(Label destination)
@@ -272,6 +383,10 @@ namespace QuanLyQuanCafe
 				MessageBox.Show("Bàn đích không có trong cơ sở dữ liệu.", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
 				return false;
 			}
+			var sourceParts = selectedTable.Name.Split('_');
+			DraftService.Move(sourceParts[0], sourceParts[1], maBan, maTang);
+			selectedTable.ImageKey = "empty";
+			destination.ImageKey = "full";
 			if (grid_HoaDon.Rows.Count > 0)
 			{
 				grid_HoaDon.Rows[0].Cells[3].Value = maBan;
@@ -291,10 +406,45 @@ namespace QuanLyQuanCafe
 				MessageBox.Show("Bạn chưa chọn bàn", "Thông báo");
 				return;
 			}
-			if (grid_DonHang.Rows.Count > 0 && (grid_HoaDon.Rows.Count == 0 || !CheckBillIsSaved()) &&
-				MessageBox.Show("Đơn hàng chưa lưu sẽ bị bỏ. Tiếp tục?", "Xác nhận", MessageBoxButtons.YesNo,
-					MessageBoxIcon.Warning) != DialogResult.Yes)
+			bool hasDraft;
+			try
+			{
+				var tableParts = selectedTable.Name.Split('_');
+				hasDraft = tooltip.GetTooltip(selectedTable) == "" && database.Database.SqlQuery<int>(
+					"SELECT COUNT(*) FROM dbo.DonTam WHERE MaBan = @table AND MaTang = @floor",
+					new SqlParameter("@table", tableParts[0]), new SqlParameter("@floor", tableParts[1])).Single() != 0;
+			}
+			catch (SqlException ex)
+			{
+				MessageBox.Show("Không thể kiểm tra đơn: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
 				return;
+			}
+			if (hasDraft)
+			{
+				if (User.Type)
+				{
+					MessageBox.Show("Chỉ quản trị viên được hủy đơn chưa thanh toán.", "Thông báo");
+					return;
+				}
+				if (MessageBox.Show("Hủy toàn bộ đơn chưa thanh toán của bàn này?", "Xác nhận",
+					MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+					return;
+				try
+				{
+					var parts = selectedTable.Name.Split('_');
+					DraftService.Cancel(parts[0], parts[1], account.MaNhanVien);
+				}
+				catch (SqlException ex)
+				{
+					MessageBox.Show("Không thể hủy đơn: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+					return;
+				}
+				catch (InvalidOperationException ex)
+				{
+					MessageBox.Show(ex.Message, "Thông báo");
+					return;
+				}
+			}
 			selectedTable.ImageKey = "empty";
 			tooltip.SetToopTip(selectedTable, "");
 			grid_HoaDon.Rows.Clear();
@@ -305,19 +455,21 @@ namespace QuanLyQuanCafe
 
 		private void lbl_XoaTatCa_Click(object sender, EventArgs e)
 		{
-			if (grid_DonHang.Rows.Count > 0 && (grid_HoaDon.Rows.Count == 0 || !CheckBillIsSaved()) &&
-				MessageBox.Show("Đơn hàng chưa lưu sẽ bị bỏ. Tiếp tục?", "Xác nhận", MessageBoxButtons.YesNo,
-					MessageBoxIcon.Warning) != DialogResult.Yes)
-				return;
-			//Ghép 2 danh sách controls cho một lệnh foreach
+			// Drafts are never removed by the bulk table-reset action.
 			foreach (Label item in table_Tang0.Controls.Cast<Label>().Concat(table_Tang1.Controls.Cast<Label>()))
 			{
-				item.ImageKey = "empty";
-				tooltip.SetToopTip(item, "");
+				if (tooltip.GetTooltip(item) != "")
+				{
+					item.ImageKey = "empty";
+					tooltip.SetToopTip(item, "");
+				}
 			}
-			grid_HoaDon.Rows.Clear();
-			grid_DonHang.Rows.Clear();
-			ClearPaymentFields();
+			if (selectedTable != null && selectedTable.ImageKey == "empty")
+			{
+				grid_HoaDon.Rows.Clear();
+				grid_DonHang.Rows.Clear();
+				ClearPaymentFields();
+			}
 			RefreshTableAppearance();
 		}
 
@@ -339,10 +491,35 @@ namespace QuanLyQuanCafe
 				MessageBox.Show("Không thể sửa hóa đơn đã lưu", "Thông báo");
 				return;
 			}
-			grid_DonHang.Rows.Remove(grid_DonHang.SelectedRows[0]);
-			grid_HoaDon.Rows.Clear();
-			ClearPaymentFields();
-			RefreshTableAppearance();
+			if (grid_DonHang.Rows.Count == 1)
+			{
+				if (User.Type)
+				{
+					MessageBox.Show("Chỉ quản trị viên được hủy đơn chưa thanh toán.", "Thông báo");
+					return;
+				}
+				if (MessageBox.Show("Xóa món cuối sẽ hủy đơn. Tiếp tục?", "Xác nhận",
+					MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+					return;
+			}
+			try
+			{
+				var parts = selectedTable.Name.Split('_');
+				long id = Convert.ToInt64(grid_DonHang.SelectedRows[0].Cells[0].Value);
+				DraftService.RemoveLine(parts[0], parts[1], id, account.MaNhanVien);
+				LoadDraft(parts[0], parts[1]);
+				grid_HoaDon.Rows.Clear();
+				ClearPaymentFields();
+				RefreshDraftIndicators();
+			}
+			catch (SqlException ex)
+			{
+				MessageBox.Show("Không thể xóa món: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+			}
+			catch (InvalidOperationException ex)
+			{
+				MessageBox.Show(ex.Message, "Thông báo");
+			}
 		}
 
 		private void btn_ThemDH_Click(object sender, EventArgs e)
@@ -375,25 +552,18 @@ namespace QuanLyQuanCafe
 				MessageBox.Show("Không tìm thấy thức uống trong CSDL", "Thông báo");
 				return;
 			}
-			string maDH = GetOrderID();
-			string maHD = GetBillID();
-			if (maDH != null && maHD != null)   //Thêm các đơn hàng vào bảng
+			try
 			{
-				string maTU = thucUong.MaThucUong;
-				string maLoai = thucUong.MaLoai;
-				int soLuong = (int)nud_SoLuong.Value;
-				if (grid_DonHang.Rows.Count == 0)
-					grid_DonHang.Rows.Add(maDH, maTU, maLoai, soLuong, maHD);
-				else
-				{
-					string maDH_TT = GetNextID(grid_DonHang.Rows[grid_DonHang.Rows.Count - 1].Cells[0].Value.ToString());
-					if (maDH_TT == null)
-						return;
-					grid_DonHang.Rows.Add(maDH_TT, maTU, maLoai, soLuong, maHD);
-				}
+				var parts = selectedTable.Name.Split('_');
+				DraftService.Add(parts[0], parts[1], thucUong.MaThucUong, thucUong.MaLoai, (byte)nud_SoLuong.Value);
+				LoadDraft(parts[0], parts[1]);
 				grid_HoaDon.Rows.Clear();
 				ClearPaymentFields();
-				RefreshTableAppearance();
+				RefreshDraftIndicators();
+			}
+			catch (SqlException ex)
+			{
+				MessageBox.Show("Không thể lưu món: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
 			}
 		}
 
@@ -442,21 +612,70 @@ namespace QuanLyQuanCafe
 		{
 			if (selectedTable == sender)
 				return;
-			if (selectedTable != null && selectedTable != sender && grid_DonHang.Rows.Count > 0 &&
-				(grid_HoaDon.Rows.Count == 0 || !CheckBillIsSaved()) &&
-				MessageBox.Show("Đơn hàng chưa lưu sẽ bị bỏ. Bạn có muốn chuyển bàn?", "Xác nhận",
-					MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
-				return;
-			//Đưa mã bàn + mã tầng ra màn hình
-			string text = (sender as Label).Name;
-			lbl_BanChon.Text = text;
-			tooltip.SetToopTip(lbl_BanChon, text);
-			selectedTable = sender as Label;
-			//Hiển thị thông tin của bàn
-			ShowBillByID(tooltip.GetTooltip(selectedTable));
-			ShowOrderByID(tooltip.GetTooltip(selectedTable));
-			ClearPaymentFields();
+			var table = (Label)sender;
+			string billId = tooltip.GetTooltip(table);
+			string[] parts = table.Name.Split('_');
+			try
+			{
+				if (billId == "")
+				{
+					LoadDraft(parts[0], parts[1]);
+					grid_HoaDon.Rows.Clear();
+				}
+				else
+				{
+					ShowBillByID(billId);
+					ShowOrderByID(billId);
+				}
+				lbl_BanChon.Text = IsTakeaway(table) ? "Mang đi: " + parts[0] : table.Name;
+				tooltip.SetToopTip(lbl_BanChon, table.Name);
+				selectedTable = table;
+				ClearPaymentFields();
+				RefreshDraftIndicators();
+			}
+			catch (SqlException ex)
+			{
+				MessageBox.Show("Không thể tải đơn: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+			}
+		}
+
+		void LoadDraft(string table, string floor)
+		{
+			var lines = DraftService.Lines(database, table, floor);
+			grid_DonHang.Rows.Clear();
+			foreach (var line in lines)
+				grid_DonHang.Rows.Add(line.MaDong, line.MaThucUong, line.MaLoai, line.SoLuong, "");
+		}
+
+		List<DraftLine> CurrentDraftLines()
+		{
+			return grid_DonHang.Rows.Cast<DataGridViewRow>().Select(row => new DraftLine
+			{
+				MaDong = Convert.ToInt64(row.Cells[0].Value),
+				MaThucUong = row.Cells[1].Value.ToString(),
+				MaLoai = row.Cells[2].Value.ToString(),
+				SoLuong = Convert.ToByte(row.Cells[3].Value)
+			}).ToList();
+		}
+
+		void RefreshDraftIndicators()
+		{
+			var drafts = DraftService.Tables(database)
+				.Select(t => t.MaBan.Trim() + "_" + t.MaTang.Trim())
+				.ToHashSet(StringComparer.OrdinalIgnoreCase);
+			foreach (Label table in table_Tang0.Controls.Cast<Label>().Concat(table_Tang1.Controls.Cast<Label>()))
+			{
+				if (tooltip.GetTooltip(table) == "")
+					table.ImageKey = drafts.Contains(table.Name) ? "full" : "empty";
+			}
+			if (IsTakeaway(selectedTable) && tooltip.GetTooltip(selectedTable) == "")
+				selectedTable.ImageKey = drafts.Contains(selectedTable.Name) ? "full" : "empty";
 			RefreshTableAppearance();
+		}
+
+		bool IsTakeaway(Label table)
+		{
+			return table != null && !table_Tang0.Controls.Contains(table) && !table_Tang1.Controls.Contains(table);
 		}
 
 		/// <summary>
@@ -706,19 +925,42 @@ namespace QuanLyQuanCafe
 		/// <returns>True nếu thành công, False nếu gặp vấn đề</returns>
 		void AddOrderToDb()
 		{
+			string nextId = GetOrderID();
+			if (nextId == null)
+				throw new InvalidOperationException("Không thể tạo mã đơn hàng.");
+			var added = new List<DonHang>();
 			foreach (DataGridViewRow row in grid_DonHang.Rows)
 			{
 				DonHang donHang = new DonHang
 				{
-					MaDonHang = row.Cells[0].Value.ToString(),
+					MaDonHang = nextId,
 					MaThucUong = row.Cells[1].Value.ToString(),
 					MaLoai = row.Cells[2].Value.ToString(),
 					SoLuong = byte.Parse(row.Cells[3].Value.ToString()),
-					MaHD = row.Cells[4].Value.ToString()
+					MaHD = grid_HoaDon.Rows[0].Cells[0].Value.ToString()
 				};
 				database.DonHang.Add(donHang);
+				added.Add(donHang);
+				if (added.Count < grid_DonHang.Rows.Count)
+				{
+					nextId = GetNextID(nextId);
+					if (nextId == null)
+						throw new InvalidOperationException("Không thể tạo mã đơn hàng tiếp theo.");
+				}
 			}
 			database.SaveChanges();
+			foreach (var order in added)
+			{
+				int count = database.Database.ExecuteSqlCommand(
+					@"INSERT INTO dbo.GiaBanDonHang (MaDonHang, DonGia)
+					  SELECT @id, DonGia FROM dbo.ThucUong
+					  WHERE MaThucUong = @drink AND MaLoai = @type AND DonGia IS NOT NULL AND DonGia >= 0",
+					new SqlParameter("@id", order.MaDonHang),
+					new SqlParameter("@drink", order.MaThucUong),
+					new SqlParameter("@type", order.MaLoai));
+				if (count != 1)
+					throw new InvalidOperationException("Không thể lưu đơn giá của món.");
+			}
 		}
 
 		/// <summary>
@@ -727,12 +969,9 @@ namespace QuanLyQuanCafe
 		/// <param name="hoaDon">Hóa đơn cần in</param>
 		private void PrintBill(string maHD)
 		{
-			HoaDon hoaDon = database.HoaDon.Where(b => b.MaHD.Equals(maHD)).SingleOrDefault();
-			string printable = "MÃ HĐ: \t{0}\r\nNGÀY: \t{1}\r\nN.VIÊN: \t{2}\r\n"
-				+ "BÀN: \t{3}\r\nTỔNG: \t{4}\r\nMÃ SK: \t{5}\r\nCẢM ƠN QUÝ KHÁCH\r\nHẸN GẶP LẠI LẦN SAU!";
-			MessageBox.Show(string.Format(printable, hoaDon.MaHD, hoaDon.NgayHD.ToString("dd/MM/yyyy"), hoaDon.MaNV, hoaDon.MaBan + "-" + hoaDon.MaTang,
-				hoaDon.TongTien, hoaDon.MaSuKien), "Hóa đơn", MessageBoxButtons.OK, MessageBoxIcon.Information);
-			//Còn thiếu chi tiết đơn hàng...
+			string receipt = BillReceipt.Load(maHD);
+			using (var form = new Form_BillDetail(receipt))
+				form.ShowDialog(this);
 		}
 
 		/// <summary>

@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using System.Windows.Forms;
+using System.Data.Entity;
+using System.Data.Entity.Infrastructure;
 
 namespace QuanLyQuanCafe
 {
@@ -110,8 +112,23 @@ namespace QuanLyQuanCafe
 				return;
 			}
 			ThucUong item = database.ThucUong.Where(i => i.MaThucUong.Equals(maThucUong) && i.MaLoai.Equals(maLoai)).SingleOrDefault();
+			if (item == null)
+			{
+				MessageBox.Show("Không tìm thấy thức uống.", "Thông báo");
+				return;
+			}
 			database.ThucUong.Remove(item);
-			database.SaveChanges();
+			try
+			{
+				database.SaveChanges();
+			}
+			catch (DbUpdateException ex)
+			{
+				database.Entry(item).State = EntityState.Unchanged;
+				MessageBox.Show("Không thể xóa thức uống có trong đơn hoặc hóa đơn: " + ex.GetBaseException().Message,
+					"Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+				return;
+			}
 			btn_Xuat.PerformClick();
 		}
 

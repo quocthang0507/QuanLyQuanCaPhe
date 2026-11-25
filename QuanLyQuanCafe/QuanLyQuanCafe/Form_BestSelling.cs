@@ -3,11 +3,18 @@ using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using System.Windows.Forms;
+using System.Data.SqlClient;
 
 namespace QuanLyQuanCafe
 {
 	public partial class Form_BestSelling : Form
 	{
+		private sealed class DrinkTotal
+		{
+			public string MaLoai { get; set; }
+			public string MaThucUong { get; set; }
+			public int SoLuong { get; set; }
+		}
 		int nam = 0, thang = 0, ngay = 0, quy = 0;
 
 		#region Events
@@ -59,26 +66,30 @@ namespace QuanLyQuanCafe
 		{
 			using (var database = new CafeRestaurantEntities())
 			{
-				var orders = database.DonHang.AsQueryable();
+				string period = "1 = 1";
 				switch (indexTime)
 				{
 					case 1:
-						orders = orders.Where(o => o.HoaDon.NgayHD.Year == nam);
+						period = "YEAR(h.NgayHD) = @year";
 						break;
 					case 2:
-						orders = orders.Where(o => o.HoaDon.NgayHD.Year == nam && (o.HoaDon.NgayHD.Month + 2) / 3 == quy);
+						period = "YEAR(h.NgayHD) = @year AND (MONTH(h.NgayHD) + 2) / 3 = @quarter";
 						break;
 					case 3:
-						orders = orders.Where(o => o.HoaDon.NgayHD.Year == nam && o.HoaDon.NgayHD.Month == thang);
+						period = "YEAR(h.NgayHD) = @year AND MONTH(h.NgayHD) = @month";
 						break;
 					case 4:
-						orders = orders.Where(o => o.HoaDon.NgayHD.Year == nam && o.HoaDon.NgayHD.Month == thang && o.HoaDon.NgayHD.Day == ngay);
+						period = "YEAR(h.NgayHD) = @year AND MONTH(h.NgayHD) = @month AND DAY(h.NgayHD) = @day";
 						break;
 				}
 
-				var totals = orders.GroupBy(o => new { o.MaLoai, o.MaThucUong })
-					.Select(g => new { g.Key.MaLoai, g.Key.MaThucUong, SoLuong = g.Sum(o => (int)o.SoLuong) })
-					.ToList();
+				var totals = database.Database.SqlQuery<DrinkTotal>(
+					@"SELECT d.MaLoai, d.MaThucUong, SUM(CONVERT(int, d.SoLuong)) AS SoLuong
+					  FROM dbo.DonHang d JOIN dbo.HoaDon h ON h.MaHD = d.MaHD
+					  WHERE NOT EXISTS (SELECT 1 FROM dbo.HoanTienHoaDon r WHERE r.MaHD = h.MaHD) AND " + period +
+					  " GROUP BY d.MaLoai, d.MaThucUong",
+					new SqlParameter("@year", nam), new SqlParameter("@quarter", quy),
+					new SqlParameter("@month", thang), new SqlParameter("@day", ngay)).ToList();
 				var drinks = database.ThucUong.ToList();
 				grid_Drink.DataSource = drinks.Select(item => new DrinkOrder(item.MaLoai, item.MaThucUong, item.TenThucUong)
 				{

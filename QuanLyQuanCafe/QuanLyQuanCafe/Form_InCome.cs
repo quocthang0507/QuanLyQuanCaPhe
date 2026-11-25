@@ -2,6 +2,7 @@
 using System.Data;
 using System.Linq;
 using System.Windows.Forms;
+using System.Data.SqlClient;
 
 namespace QuanLyQuanCafe
 {
@@ -56,46 +57,38 @@ namespace QuanLyQuanCafe
 
 		private void ShowIncome_Day()
 		{
-			using (var database = new CafeRestaurantEntities())
-			{
-				tbx_TongTrongNgay.Text = (database.HoaDon.Where(b => b.NgayHD.Day == ngay && b.NgayHD.Month == thang && b.NgayHD.Year == nam)
-					.Sum(b => (long?)b.TongTien) ?? 0).ToString();
-			}
+			tbx_TongTrongNgay.Text = Income("YEAR(h.NgayHD) = @year AND MONTH(h.NgayHD) = @month AND DAY(h.NgayHD) = @day").ToString();
 		}
 
 		private void ShowIncome_Month()
 		{
-			using (var database = new CafeRestaurantEntities())
-			{
-				tbx_TongTrongThang.Text = (database.HoaDon.Where(b => b.NgayHD.Month == thang && b.NgayHD.Year == nam)
-					.Sum(b => (long?)b.TongTien) ?? 0).ToString();
-			}
+			tbx_TongTrongThang.Text = Income("YEAR(h.NgayHD) = @year AND MONTH(h.NgayHD) = @month").ToString();
 		}
 
 		private void ShowIncome_Quarter()
 		{
-			using (var database = new CafeRestaurantEntities())
-			{
-				tbx_TongTrongQuy.Text = (database.HoaDon.Where(b => (b.NgayHD.Month + 2) / 3 == quy && b.NgayHD.Year == nam)
-					.Sum(b => (long?)b.TongTien) ?? 0).ToString();
-			}
+			tbx_TongTrongQuy.Text = Income("YEAR(h.NgayHD) = @year AND (MONTH(h.NgayHD) + 2) / 3 = @quarter").ToString();
 		}
 
 		private void ShowIncome_Year()
 		{
-			using (var database = new CafeRestaurantEntities())
-			{
-				tbx_TongTrongNam.Text = (database.HoaDon.Where(b => b.NgayHD.Year == nam)
-					.Sum(b => (long?)b.TongTien) ?? 0).ToString();
-			}
+			tbx_TongTrongNam.Text = Income("YEAR(h.NgayHD) = @year").ToString();
 		}
 
 		void ShowIncome_Total()
 		{
+			tbx_TongThuNhap.Text = Income("1 = 1").ToString();
+		}
+
+		long Income(string period)
+		{
 			using (var database = new CafeRestaurantEntities())
-			{
-				tbx_TongThuNhap.Text = (database.HoaDon.Sum(b => (long?)b.TongTien) ?? 0).ToString();
-			}
+				return database.Database.SqlQuery<long>(
+					@"SELECT COALESCE(SUM(CONVERT(bigint, h.TongTien)), CONVERT(bigint, 0))
+					  FROM dbo.HoaDon h WHERE NOT EXISTS
+					  (SELECT 1 FROM dbo.HoanTienHoaDon r WHERE r.MaHD = h.MaHD) AND " + period,
+					new SqlParameter("@year", nam), new SqlParameter("@month", thang),
+					new SqlParameter("@day", ngay), new SqlParameter("@quarter", quy)).Single();
 		}
 	}
 }
