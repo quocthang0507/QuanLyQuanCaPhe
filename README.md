@@ -16,7 +16,8 @@ Các thay đổi gồm sửa nhập món vào lưới, lưu hóa đơn và chi t
 ## Giới hạn hiện tại
 
 - Chỉ hỗ trợ một cửa hàng, một máy; dữ liệu đơn đang nhập và trạng thái bàn trên giao diện chưa được khôi phục sau khi đóng ứng dụng.
-- Chuyển bàn vẫn chưa được triển khai; nút “in hóa đơn” hiện hiển thị thông tin trên màn hình, chưa điều khiển máy in.
+- Để chuyển bàn, chọn bàn đang có đơn chưa thanh toán, chọn **Chuyển bàn** rồi chọn bàn trống. Đơn và hóa đơn nháp được chuyển sang bàn mới; lịch sử hóa đơn đã thanh toán không thay đổi. Đơn nháp vẫn chỉ tồn tại trong phiên hiện tại.
+- Nút **Thanh toán** lưu và hiển thị hóa đơn trên màn hình, chưa điều khiển máy in.
 - Các thay đổi cần được kiểm thử với bản sao dữ liệu và quy trình thực tế của cửa hàng trước khi sử dụng chính thức.
 
 ![Diagram](Diagram.PNG?raw=true "Diagram")

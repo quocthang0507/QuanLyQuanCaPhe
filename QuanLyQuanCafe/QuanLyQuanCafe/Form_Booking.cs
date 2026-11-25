@@ -3,6 +3,7 @@ using System.Data;
 using System.Data.SqlClient;
 using System.Data.Entity.Infrastructure;
 using System.Data.Entity.Core;
+using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
 
@@ -20,6 +21,7 @@ namespace QuanLyQuanCafe
 			InitializeComponent();
 			this.Account = account;
 			grid_HoaDon.ReadOnly = true;
+			ApplySalesTheme();
 		}
 
 		/// <summary>
@@ -194,6 +196,7 @@ namespace QuanLyQuanCafe
 				}
 				selectedTable.ImageKey = "full";
 				AddTooltipToTable(maHoaDon);
+				RefreshTableAppearance();
 				PrintBill(maHoaDon);
 			}
 		}
@@ -207,8 +210,78 @@ namespace QuanLyQuanCafe
 
 		private void lbl_ChuyenBan_Click(object sender, EventArgs e)
 		{
-			Form_Moving form = new Form_Moving(table_Tang0, table_Tang1); //Truyền cho form chuyển bàn các thông tin cần thiết
-			form.ShowDialog();
+			try
+			{
+				if (selectedTable == null || grid_DonHang.Rows.Count == 0 ||
+					(grid_HoaDon.Rows.Count > 0 && CheckBillIsSaved()))
+				{
+					MessageBox.Show("Hãy chọn bàn có đơn hàng chưa thanh toán để chuyển.", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+					return;
+				}
+
+				var source = selectedTable;
+				var knownTables = database.Ban.AsNoTracking().Select(b => new { b.MaBan, b.MaTang }).ToList()
+					.Select(b => b.MaBan.Trim() + "_" + b.MaTang.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+				var destinations = table_Tang0.Controls.Cast<Label>().Concat(table_Tang1.Controls.Cast<Label>())
+					.Where(table => table != source && table.ImageKey == "empty" &&
+						tooltip.GetTooltip(table) == "" && knownTables.Contains(table.Name))
+					.ToList();
+				if (destinations.Count == 0)
+				{
+					MessageBox.Show("Không có bàn trống để chuyển.", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+					return;
+				}
+				using (var form = new Form_Moving(source, destinations))
+				{
+					if (form.ShowDialog(this) != DialogResult.OK)
+						return;
+					MoveDraftTo(form.Destination);
+				}
+			}
+			catch (SqlException ex)
+			{
+				MessageBox.Show("Không thể chuyển bàn: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+			}
+			catch (EntityException ex)
+			{
+				MessageBox.Show("Không thể chuyển bàn: " + ex.GetBaseException().Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+			}
+		}
+
+		bool MoveDraftTo(Label destination)
+		{
+			if (selectedTable == null || grid_DonHang.Rows.Count == 0 ||
+				(grid_HoaDon.Rows.Count > 0 && CheckBillIsSaved()) ||
+				destination == null || destination == selectedTable ||
+				!table_Tang0.Controls.Contains(destination) && !table_Tang1.Controls.Contains(destination) ||
+				destination.ImageKey != "empty" || tooltip.GetTooltip(destination) != "")
+			{
+				MessageBox.Show("Không thể chuyển đơn. Hãy chọn lại bàn trống.", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+				return false;
+			}
+			string[] parts = destination.Name.Split('_');
+			if (parts.Length != 2)
+			{
+				MessageBox.Show("Bàn đích không có trong cơ sở dữ liệu.", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+				return false;
+			}
+			string maBan = parts[0];
+			string maTang = parts[1];
+			if (!database.Ban.Any(b => b.MaBan == maBan && b.MaTang == maTang))
+			{
+				MessageBox.Show("Bàn đích không có trong cơ sở dữ liệu.", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+				return false;
+			}
+			if (grid_HoaDon.Rows.Count > 0)
+			{
+				grid_HoaDon.Rows[0].Cells[3].Value = maBan;
+				grid_HoaDon.Rows[0].Cells[4].Value = maTang;
+			}
+			selectedTable = destination;
+			lbl_BanChon.Text = destination.Name;
+			tooltip.SetToopTip(lbl_BanChon, destination.Name);
+			RefreshTableAppearance();
+			return true;
 		}
 
 		private void lbl_XoaBan_Click(object sender, EventArgs e)
@@ -226,6 +299,8 @@ namespace QuanLyQuanCafe
 			tooltip.SetToopTip(selectedTable, "");
 			grid_HoaDon.Rows.Clear();
 			grid_DonHang.Rows.Clear();
+			ClearPaymentFields();
+			RefreshTableAppearance();
 		}
 
 		private void lbl_XoaTatCa_Click(object sender, EventArgs e)
@@ -242,6 +317,8 @@ namespace QuanLyQuanCafe
 			}
 			grid_HoaDon.Rows.Clear();
 			grid_DonHang.Rows.Clear();
+			ClearPaymentFields();
+			RefreshTableAppearance();
 		}
 
 		private void lbl_XemHD_Click(object sender, EventArgs e)
@@ -264,6 +341,8 @@ namespace QuanLyQuanCafe
 			}
 			grid_DonHang.Rows.Remove(grid_DonHang.SelectedRows[0]);
 			grid_HoaDon.Rows.Clear();
+			ClearPaymentFields();
+			RefreshTableAppearance();
 		}
 
 		private void btn_ThemDH_Click(object sender, EventArgs e)
@@ -313,6 +392,8 @@ namespace QuanLyQuanCafe
 					grid_DonHang.Rows.Add(maDH_TT, maTU, maLoai, soLuong, maHD);
 				}
 				grid_HoaDon.Rows.Clear();
+				ClearPaymentFields();
+				RefreshTableAppearance();
 			}
 		}
 
@@ -374,6 +455,8 @@ namespace QuanLyQuanCafe
 			//Hiển thị thông tin của bàn
 			ShowBillByID(tooltip.GetTooltip(selectedTable));
 			ShowOrderByID(tooltip.GetTooltip(selectedTable));
+			ClearPaymentFields();
+			RefreshTableAppearance();
 		}
 
 		/// <summary>
@@ -547,12 +630,6 @@ namespace QuanLyQuanCafe
 		/// </summary>
 		void AddTooltip()
 		{
-			tooltip.SetToopTip(lbl_ApDung, "Thêm các đơn hàng vào hóa đơn");
-			tooltip.SetToopTip(lbl_InHD, "In hóa đơn");
-			tooltip.SetToopTip(lbl_ChuyenBan, "Chuyển thông tin hóa đơn từ bàn này sang bàn khác");
-			tooltip.SetToopTip(lbl_XoaBan, "Làm trống một bàn");
-			tooltip.SetToopTip(lbl_XoaTatCa, "Làm trống tất cả các bàn");
-			tooltip.SetToopTip(lbl_XemHD, "Xem danh sách hóa đơn");
 			tooltip.SetToopTip(btn_ThemDH, "Thêm lựa chọn hiện tại vào danh sách đơn hàng");
 			tooltip.SetToopTip(btn_XoaDH, "Xóa một lựa chọn ra khỏi danh sách đơn hàng");
 		}

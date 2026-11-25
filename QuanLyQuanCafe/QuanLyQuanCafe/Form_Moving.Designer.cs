@@ -100,7 +100,6 @@
 			this.MaximizeBox = false;
 			this.Name = "Form_Moving";
 			this.Text = "CHUYỂN BÀN";
-			this.Load += new System.EventHandler(this.Form_Moving_Load);
 			this.ResumeLayout(false);
 			this.PerformLayout();
 

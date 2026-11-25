@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
 
@@ -7,80 +8,65 @@ namespace QuanLyQuanCafe
 {
 	public partial class Form_Moving : Form
 	{
-		TableLayoutPanel tangTret;
-		TableLayoutPanel tangMot;
+		readonly List<Label> availableDestinations;
 
-		[System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
-		public TableLayoutPanel Tang0
-		{
-			get { return tangTret; }
-			set { tangTret = value; }
-		}
-
-		[System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
-		public TableLayoutPanel Tang1
-		{
-			get { return tangMot; }
-			set { tangMot = value; }
-		}
-
-		public Form_Moving(TableLayoutPanel tang0, TableLayoutPanel tang1)
+		public Form_Moving(Label source, IEnumerable<Label> destinations)
 		{
 			InitializeComponent();
-			Tang0 = tang0;
-			Tang1 = tang1;
+			availableDestinations = destinations.ToList();
+			cbx_BanChuyen.DropDownStyle = ComboBoxStyle.DropDownList;
+			cbx_BanChuyen.Items.Add(source.Name);
+			cbx_BanChuyen.SelectedIndex = 0;
+			cbx_BanChuyen.Enabled = false;
+			cbx_BanDen.DropDownStyle = ComboBoxStyle.DropDownList;
+			cbx_BanDen.Items.AddRange(availableDestinations.Select(table => table.Name).ToArray());
+			if (cbx_BanDen.Items.Count > 0)
+				cbx_BanDen.SelectedIndex = 0;
+			btn_Chuyen.Enabled = cbx_BanDen.Items.Count > 0;
+			AcceptButton = btn_Chuyen;
+			btn_Chuyen.Location = new Point(90, 125);
+			var cancel = new Button
+			{
+				Text = "Hủy",
+				Location = new Point(194, 125),
+				Size = btn_Chuyen.Size,
+				DialogResult = DialogResult.Cancel,
+				FlatStyle = FlatStyle.Flat,
+				BackColor = Color.White,
+				ForeColor = Color.FromArgb(66, 45, 33),
+				UseVisualStyleBackColor = false
+			};
+			Controls.Add(cancel);
+			CancelButton = cancel;
+			StartPosition = FormStartPosition.CenterParent;
+			BackColor = Color.FromArgb(250, 246, 239);
+			ForeColor = Color.FromArgb(66, 45, 33);
+			btn_Chuyen.FlatStyle = FlatStyle.Flat;
+			btn_Chuyen.BackColor = Color.FromArgb(111, 73, 49);
+			btn_Chuyen.ForeColor = Color.White;
+			btn_Chuyen.FlatAppearance.BorderSize = 0;
+			btn_Chuyen.UseVisualStyleBackColor = false;
 		}
 
-		#region Events
-		private void Form_Moving_Load(object sender, EventArgs e)
+		[System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+		public Label Destination
 		{
-			Load_BanChuyen();
-			Load_BanDen();
+			get
+			{
+				int index = cbx_BanDen.SelectedIndex;
+				return index >= 0 && index < availableDestinations.Count ? availableDestinations[index] : null;
+			}
 		}
 
 		private void btn_Chuyen_Click(object sender, EventArgs e)
 		{
-			MessageBox.Show("Tính năng đang phát triển...", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
-		}
-
-		#endregion
-
-		#region Methods
-
-		/// <summary>
-		/// Load các bàn có khách vào combobox bàn cần chuyển
-		/// </summary>
-		void Load_BanChuyen()
-		{
-			List<String> ds = new List<string>();
-			foreach (Label item in tangTret.Controls.Cast<Label>().Concat(tangMot.Controls.Cast<Label>()))
+			if (Destination == null)
 			{
-				if (item.ImageKey == "full")
-					ds.Add(item.Name);
+				MessageBox.Show("Vui lòng chọn bàn trống.", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+				return;
 			}
-			cbx_BanChuyen.DataSource = ds;
+			DialogResult = DialogResult.OK;
+			Close();
 		}
-
-		/// <summary>
-		/// Load các bàn chưa có khách vào combobox bàn cần đến
-		/// </summary>
-		void Load_BanDen()
-		{
-			List<String> ds = new List<string>();
-			foreach (Label item in tangTret.Controls.Cast<Label>().Concat(tangMot.Controls.Cast<Label>()))
-			{
-				if (item.ImageKey == "empty")
-					ds.Add(item.Name);
-			}
-			cbx_BanDen.DataSource = ds;
-		}
-
-		bool ChuyenBan(string maBan_Nguon, string maTang_Nguon, string maBan_Dich, string maTang_Dich)
-		{
-			return true;
-		}
-
-		#endregion
-
 	}
 }
